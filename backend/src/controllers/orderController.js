@@ -67,8 +67,6 @@ export const cancelBuyerOrder = async (req, res) => {
   res.json({ message: "Order cancelled successfully", order });
 };
 
-import Order from "../models/Order.js";
-
 export const updateSellerProductStatus = async (req, res) => {
   const { status } = req.body;
   const { orderId } = req.params;
