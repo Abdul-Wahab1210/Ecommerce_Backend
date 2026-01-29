@@ -7,7 +7,13 @@ import orderRoutes from "./routes/orderRoutes.js";
 
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: "http://localhost:5173", // EXACT frontend origin
+    credentials: true, // REQUIRED for cookies / auth
+  }),
+);
+
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);

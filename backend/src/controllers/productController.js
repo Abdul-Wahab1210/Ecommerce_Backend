@@ -18,7 +18,7 @@ export const createProduct = async (req, res) => {
     images: imageUrls,
     seller: req.user._id,
     stock: stock,
-    category: category,
+    category: `${category ? category : "General"}`,
   });
 
   res.status(201).json(product);
