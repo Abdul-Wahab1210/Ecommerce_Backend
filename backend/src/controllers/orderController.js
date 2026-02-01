@@ -9,12 +9,29 @@ export const createOrder = async (req, res) => {
   }
 
   let totalPrice = 0;
+
+  // Check stock and calculate total price
   for (const item of products) {
     const product = await Product.findById(item.product);
     if (!product) return res.status(404).json({ message: "Product not found" });
+
+    if (product.stock < item.quantity) {
+      return res.status(400).json({
+        message: `Not enough stock for ${product.name}. Available: ${product.stock}`,
+      });
+    }
+
     totalPrice += product.price * item.quantity;
   }
 
+  // Deduct stock
+  for (const item of products) {
+    await Product.findByIdAndUpdate(item.product, {
+      $inc: { stock: -item.quantity },
+    });
+  }
+
+  // Create the order
   const order = await Order.create({
     buyer: req.user._id,
     products,
@@ -61,6 +78,13 @@ export const cancelBuyerOrder = async (req, res) => {
       .json({ message: "Only pending orders can be cancelled" });
   }
 
+  // Restore stock on cancellation
+  for (const item of order.products) {
+    await Product.findByIdAndUpdate(item.product, {
+      $inc: { stock: item.quantity },
+    });
+  }
+
   order.status = "cancelled";
   await order.save();
 
@@ -83,8 +107,18 @@ export const updateSellerProductStatus = async (req, res) => {
 
   let updated = false;
 
+  // Track products whose status is changed to cancelled for stock restoration
+  const cancelledProducts = [];
+
   order.products.forEach((item) => {
     if (item.product.seller.toString() === req.user._id.toString()) {
+      // Only restore stock if status changes from non-cancelled → cancelled
+      if (status === "cancelled" && item.status !== "cancelled") {
+        cancelledProducts.push({
+          productId: item.product._id,
+          quantity: item.quantity,
+        });
+      }
       item.status = status;
       updated = true;
     }
@@ -94,6 +128,13 @@ export const updateSellerProductStatus = async (req, res) => {
     return res
       .status(403)
       .json({ message: "You do not own any product in this order" });
+  }
+
+  // Restore stock for cancelled items
+  for (const cp of cancelledProducts) {
+    await Product.findByIdAndUpdate(cp.productId, {
+      $inc: { stock: cp.quantity },
+    });
   }
 
   // Auto-update overall order status
@@ -136,6 +177,13 @@ export const updateBuyerOrder = async (req, res) => {
 
   if (order.orderStatus !== "pending") {
     return res.status(400).json({ message: "Order can no longer be modified" });
+  }
+
+  // Restore stock when buyer cancels order
+  for (const item of order.products) {
+    await Product.findByIdAndUpdate(item.product, {
+      $inc: { stock: item.quantity },
+    });
   }
 
   order.orderStatus = "cancelled";
